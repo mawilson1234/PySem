@@ -58,11 +58,12 @@ t = 't'
 et = [e,t]
 
 # Define a list of words
-# A lexical entry has three parts:
+# A lexical entry has four parts:
+# A PF (string corresponding to what we want to print it as)
 # A semantic type, consisting of an order list of e and t
 # A denotation, which is a function that takes an argument of the specified type
 # A set, which defines the results of applying the function to the argument
-# (We probably don't really need the function, but it's nice so it looks more like your traditional lambda semantics)
+# (The set would probably be sufficient here, but it's nice to have a function so it looks more like your traditional lambda semantics)
 jumping = {'PF' : 'jumping',
 		   'type' : et, 
 		   'denotation' : lambda x: jumping['set'][x] if x in jumping['set'].keys() else 0,
@@ -75,7 +76,7 @@ love = {'PF' : 'love',
 		'set' : {'John' : {'Mary' : 1}, 
 		 		 'Bill' : {'Susan' : 1}}}
 
-# The weirdness allows this to go in either recipient theme or theme recipient order
+# This assumes recipient theme order (when using a right-branch structure)
 give = {'PF' : 'give',
 		'type' : [e, [e, et]],
 		'denotation' : (lambda x: lambda y: lambda z: give['set'][x][y][z] if
@@ -151,7 +152,7 @@ word_list.extend([SHIFT])
 # Context for pronoun resolution
 c = {1 : John['denotation'], 2: Mary['denotation'], 3: Bill['denotation']}
 
-# Assignment function
+# Assignment function that maps an index to an entity in the context
 def g(n):
 	try:
 		if n in c.keys():
@@ -161,19 +162,24 @@ def g(n):
 	except:
 		print(f'{n} not in domain of assignment function g.')
 
-# Pronoun (get the right labels for these)
+# Pronoun (note that this does not implement presuppositions)
 he1 = {'PF' : 'he',
 	   'type' : e,
 	   'denotation' : g(1)}
-
 word_list.extend([he1])
 
+# One final thing each word has: a version of its denotation function formatted as a string
+# This is just so we can print out the results of each semantic composition step in a readable way, since Python lambda functions are not output as strings
 for word in word_list:
 	word.update({'den_str' : format_den_str(word['denotation'])})
 
 def function_application(*, f, arg):
-	# The way we get the set to return here is a bit tricky, since python doesn't allow us to define sets of sets easily
-	# It's really a hack to make 'IS' work
+	# Return the result of function application
+	# PF is just concatenation of the strings
+	# Den_str is handled by the formatting function above
+	# The type is the result of getting rid of the first type in f
+	# The denotation is the result of applying the function's denotation to the argument's denotation
+	# The set is whatever the characteristic set of f maps the argument to (0 if arg is not in f's characteristic set)
 	return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
 			'den_str': format_application(f = f, arg = arg),
 			'type' : f['type'][1:][0],
@@ -183,14 +189,21 @@ def function_application(*, f, arg):
 			#'set' : {t[1:] for t in Y['set'] if X['denotation'] == t[0] and len(t) > 0}}
 
 def predicate_modification(*, f1, f2):
+	# Return the result of predicate modification
+	# PF is contactenation of the strings
+	# Den_str is handled by the formatting function above
+	# Since this is only called when f1 and f2 have the same type, the type is equal to their type (either f1['type'] or f2['type'] would work, since the types are identical)
+	# The denotation is True iff f1(x) and f2(x)
+	# The set is the set of all items in both f1 and f2 (e.g., every item in f1 that is also in f2)
 	return {'PF' : f'{f1["PF"]} {f2["PF"]}',
 			'den_str' : format_modification(f1, f2),
 			'type' : f1['type'],
-			'denotation' : lambda P: 1 if f1['denotation'](P) and f2['denotation'](P) else 0,
+			'denotation' : lambda x: 1 if f1['denotation'](x) and f2['denotation'](x) else 0,
 			'set' : [item for item in f1['set'] if item in f2['set']]}
 
 # Interpretation function
 def i(X, Y = '', /, *, verbose = False):
+	# If there are two arguments, figure out what semantic composition rule to apply
 	if Y:
 		# Function application when either X or Y is in the domain of the other
 		if Y['type'] == X['type'][0]:
@@ -208,6 +221,7 @@ def i(X, Y = '', /, *, verbose = False):
 			return predicate_modification(f1 = X, f2 = Y)
 		else:
 			print(f'Type mismatch: type {X["type"]} cannot compose with type {Y["type"]}.')
+	# Otherwise, return the single argument
 	else:
 		return X
 
@@ -239,4 +253,4 @@ def interpret_sentence(sentence, /, verbose = False):
 	#if verbose:
 	print(interpretation['denotation'])
 
-# TODO: pronominal binding, quantifiers, read in and format dict from CSV(?)
+# TODO: pronominal binding/predicate abstraction, quantifiers, read in and format dict from CSV(?)
