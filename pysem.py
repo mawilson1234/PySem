@@ -353,11 +353,11 @@ def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
 
 # Interpret a sentence (allows for printing the full sentence only once)
 def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
-	#if verbose:
-	print(f'\nInterpretation of sentence "{sentence["PF"]}":')
+	if verbose:
+		print(f'\nInterpretation of sentence "{sentence["PF"]}":')
 	interpretation = interpret_sentence_r(sentence['LF'], g_local = g_local, verbose = verbose)
-	#if verbose:
-	print(f'{interpretation["denotation"]}\n')
+	if verbose:
+		print(f'{interpretation["denotation"]}\n')
 	return interpretation
 
 # Some test sentences
