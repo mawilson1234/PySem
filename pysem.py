@@ -52,10 +52,11 @@ def format_application(*, f, arg):
 	if not isinstance(arg, str):
 		if not isinstance(arg['denotation'], str):
 			arg = arg['den_str']
-		# For 'the'
+			# For 'the'
 			if not 'the unique x s.t.' in formatted:
-				arg = re.sub(r'^λ.*?\.', '', arg)
-				arg = re.sub(r'\(.*?\)', '', arg)
+				if re.findall(r'^λ.*?\.', arg):
+					arg = re.sub(r'^λ.*?\.', '', arg)
+					arg = re.sub(r'\(.*?\)', '', arg)
 			else:
 				arg_to_apply = formatted[formatted.index('('):][1:-1]
 				formatted = re.sub(fr'\({arg_to_apply}\)', '', formatted)
@@ -210,9 +211,9 @@ the = {'PF' : 'the',
 	   'denotation' : lambda P: [word['denotation'] for word in word_list if P(word['denotation']) == 1][0] if sum([P(word['denotation']) for word in word_list]) == 1 else '#'}
 
 that_comp = {'PF' : 'that',
-			 'type' : [et, et],
-			 'denotation' : lambda P: P
-			 }
+			 'type' : [t, t],
+			 'denotation' : lambda P: P,
+			 'set' : {0 : 0, 1 : 1}}
 word_list.extend([the, that_comp])
 
 # Context for pronoun resolution
@@ -278,12 +279,12 @@ def function_application(*, f, arg):
 	# The denotation is the result of applying the function's denotation to the argument's denotation
 	# The set is whatever the characteristic set of f maps the argument to (0 if arg is not in f's characteristic set)
 	# Some special logic for the identity function, since its characteristic set is not a function of the word list but a function of any derivable et function
-	if f['denotation'](arg['denotation']) == arg['denotation']:
-		return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
-				'den_str' : arg['den_str'],
-				'type' : arg['type'],
-				'denotation' : arg['denotation'],
-				'set' : arg['set']}
+	#if f['denotation'](arg['denotation']) == arg['denotation']:
+	#	return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
+	#			'den_str' : arg['den_str'],
+	#			'type' : arg['type'],
+	#			'denotation' : arg['denotation'],
+	#			'set' : arg['set']}
 	if 'set' in f.keys():
 		if f['set'] == 0:
 			s = 0
@@ -443,7 +444,8 @@ sentence5 = {'PF' : 'John, Mary loves', 'LF' : [John, [1, [Mary, [love, t(1)]]]]
 # Does not currently work correctly. It will compute, but not display the right result. Unless we update the word 'love' to use variables other than x and y for its lambda function
 sentence6 = {'PF' : 'Mary1, Bill2, t1 loves t2', 'LF' : [Mary, [1, [Bill, [2, [t(1), [love, t(2)]]]]]]}
 
-# Relative clause
-sentence7 = {'PF' : 'the hat that Mary loves', 'LF' : [the, [hat, [that_comp, [1, [Mary, [love, t(1)]]]]]]}
+# Relative clauses
+sentence7 = {'PF' : 'the hat that Mary loves', 'LF' : [the, [hat, [1, [that_comp, [Mary, [love, t(1)]]]]]]}
+sentence8 = {'PF' : 'the dress that Mary loves', 'LF' : [the, [dress, [1, [that_comp, [Mary, [love, t(1)]]]]]]}
 
 # I'm not sure I'm happy with exactly how the output for predicate abstraction is displayed---but it gets the correct results. The issue is that it won't display nested modifications to the assignment function correctly because of how getting the strings for those works. But the interpretations are correct.
