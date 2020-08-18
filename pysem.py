@@ -197,20 +197,30 @@ def g(n, *, mod = ''):
 	except:
 		print(f'{n} not in domain of assignment function g.')
 
-# Pronoun (note that this does not implement presuppositions)
-he1 = {'PF' : 'he1'.translate(SUB),
-	   'index' : 1,
-	   'type' : e,
-	   'denotation' : 'g(1)'}
-word_list.extend([he1])
+pronouns = []
 
-# Trace (just like a pronoun)
-t1 = {'PF' : 't1'.translate(SUB),
-	  'index' : 1,
-	  'type' : e,
-	  'denotation' : 'g(1)'}
+# Pronouns and traces are functions that return lexical entries given an index
+def he(i):
+	he_i = {'PF' : f'he{i}'.translate(SUB),
+		  'index' : i,
+		  'type' : e,
+		  'denotation' : f'g({i})'}
+	if not he_i in word_list:
+		word_list.extend([he_i])
+	if not he_i in pronouns:
+		pronouns.extend([he_i])
+	return he_i
 
-pronouns = [he1, t1]
+def t(i):
+	t_i = {'PF' : f't{i}'.translate(SUB),
+		 'index' : i,
+		 'type' : e,
+		 'denotation' : f'g({i})'}
+	if not t_i in word_list:
+		word_list.extend([t_i])
+	if not t_i in pronouns:
+		pronouns.extend([t_i])
+	return t_i
 
 # One final thing each word has: a version of its denotation function formatted as a string
 # This is just so we can print out the results of each semantic composition step in a readable way, since Python lambda functions are not output as strings
@@ -364,6 +374,8 @@ def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
 # Some test sentences
 sentence1 = {'PF' : "The hat is blue", 'LF' : [the_hat, [[IS_IDENT, SHIFT], blue]]}
 sentence2 = {'PF' : 'The hat is the dress', 'LF' : [the_hat, [IS_IDENT, the_dress]]}
-sentence3 = {'PF' : 'He1 is jumping'.translate(SUB), 'LF' : [he1, [IS_PRED, jumping]]}
-sentence4 = {'PF' : 'Bill, Mary loves', 'LF' : [Bill, [1, [Mary, [love, t1]]]]}
-sentence5 = {'PF' : 'John, Mary loves', 'LF' : [John, [1, [Mary, [love, t1]]]]}
+sentence3 = {'PF' : 'He1 is jumping'.translate(SUB), 'LF' : [he(1), [IS_PRED, jumping]]}
+sentence4 = {'PF' : 'Bill, Mary loves', 'LF' : [Bill, [1, [Mary, [love, t(1)]]]]}
+sentence5 = {'PF' : 'John, Mary loves', 'LF' : [John, [1, [Mary, [love, t(1)]]]]}
+
+# Note that sentences involving multiple predicate abstractions don't currently work because we use the same label for all when abstracting---this is not a simple thing to fix since it involves generating a unique new label that isn't being used. It will be implemented later
