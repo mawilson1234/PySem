@@ -256,7 +256,9 @@ def predicate_abstraction(*, index, pred, g_local, verbose = False):
 	# Type is [e, pred['type']]
 	# The denotation is the recursive interpretation of the structure where index is mapped to x
 	# The set is the mapping of a word's denotation to true if it's type e and if it's in the set of the interpretation of the predicate wrt the modified assignment function
-	interpret_sentence_r(pred, g_local = g_mod(f'{index}/x'), verbose = verbose)
+	# We do this so that we only print out the results of interpreting things once
+	if verbose:
+		interpret_sentence_r(pred, g_local = g_mod(f'{index}/x'), verbose = verbose)
 	return {'PF' : f'{index} ' + re.sub(f'^{index} ', '', interpret_sentence_r(pred, g_local = g_local)['PF']),
 			'den_str' : 'λx.' + re.sub(g(index), f'g({index}/x)({index})', interpret_sentence_r(pred, g_local = g_local)['den_str']),
 			'type' : [e, interpret_sentence_r(pred, g_local = g_local)['type']],
