@@ -333,22 +333,22 @@ def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
 	try:
 		if len(sentence) > 2:
 			raise Exception
-	if len(sentence) == 2 and not isinstance(sentence, dict):
-		branch1 = sentence[0]
-		branch2 = sentence[1]
-		if not isinstance(branch1, dict):
-			if isinstance(branch1, int):
-				return i(branch1, branch2, g_local = g_local, verbose = verbose)
-			else:
-				branch1 = interpret_sentence_r(branch1, g_local = g_local, verbose = verbose)
-		if not isinstance(branch2, dict):
-			if isinstance(branch2, int):
-				return i(branch1, branch2, verbose = verbose)
-			else:
-				branch2 = interpret_sentence_r(branch2, g_local = g_local, verbose = verbose)
-		return i(branch1, branch2, g_local = g_local, verbose = verbose)
-	elif isinstance(sentence, dict):
-		return i(sentence, g_local = g_local, verbose = verbose)
+		if len(sentence) == 2 and not isinstance(sentence, dict):
+			branch1 = sentence[0]
+			branch2 = sentence[1]
+			if not isinstance(branch1, dict):
+				if isinstance(branch1, int):
+					return i(branch1, branch2, g_local = g_local, verbose = verbose)
+				else:
+					branch1 = interpret_sentence_r(branch1, g_local = g_local, verbose = verbose)
+			if not isinstance(branch2, dict):
+				if isinstance(branch2, int):
+					return i(branch1, branch2, verbose = verbose)
+				else:
+					branch2 = interpret_sentence_r(branch2, g_local = g_local, verbose = verbose)
+			return i(branch1, branch2, g_local = g_local, verbose = verbose)
+		elif isinstance(sentence, dict):
+			return i(sentence, g_local = g_local, verbose = verbose)
 	except:
 		print(f'Error: only binary branching! {sentence} has too many branches!')
 
