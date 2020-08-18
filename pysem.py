@@ -14,6 +14,7 @@ def var():
 
 # Format the assignment function
 def format_g(g_local, n):
+	#breakpoint()
 	g_local_set = ['/'.join([str(i), g_local(i)]) for i in c]
 	g_global_set = ['/'.join([str(i), g(i)]) for i in c]
 	if g_local_set == g_global_set:
@@ -44,18 +45,38 @@ def format_den_str(f):
 
 # Stringify the output of function application since python lambda functions aren't output as strings
 def format_application(*, f, arg):
-	formatted = f['den_str']
-	if not isinstance(arg['denotation'], str):
-		arg = arg['den_str']
-		arg = re.sub(r'^λ.*?\.', '', arg)
-		arg = re.sub(r'\(.*?\)', '', arg)
+	if isinstance(f, dict):
+		formatted = f['den_str']
 	else:
-		arg = arg['den_str']
+		formatted = f
+	if not isinstance(arg, str):
+		if not isinstance(arg['denotation'], str):
+			arg = arg['den_str']
+		# For 'the'
+			if not 'the unique x s.t.' in formatted:
+				arg = re.sub(r'^λ.*?\.', '', arg)
+				arg = re.sub(r'\(.*?\)', '', arg)
+			else:
+				arg_to_apply = formatted[formatted.index('('):][1:-1]
+				formatted = re.sub(fr'\({arg_to_apply}\)', '', formatted)
+				arg = format_application(f = arg, arg = arg_to_apply)
+		else:
+			arg = arg['den_str']
 	# Get the label for the argument
 	if re.match(r'^λ(.*?)\.', formatted):
+		# Get the variable names used by any other lambda functions
+		existing_vars = re.findall(r'λ(.*?)\.', formatted)
 		arg_label = re.match(r'^λ(.*?)\.', formatted).groups()[0]
 		# Strip off that label
 		formatted = re.sub(r'^λ.*?\.', '', formatted)
+		# If the argument is also the name of a variable
+		if arg in existing_vars and len(existing_vars) > 1:
+			# Get a variable name that is not already being used
+			variable = var()
+			while (var_name := next(variable)) in existing_vars:
+				continue
+			# Replace the variable name in the formatted string with the new variable name so we don't incorrectly bind it
+			formatted = re.sub(fr'(^|[^A-Za-z0-9]){arg}($|[^A-Za-z0-9])', fr'\g<1>{var_name}\g<2>', formatted)
 		# Format assignment functions
 		#if re.findall(r'g\(.*?\/.*?\)', formatted):
 		#	breakpoint()
@@ -103,9 +124,10 @@ jumping = {'PF' : 'jumping',
 # Note that the arguments need to be specified in the same order in the function and the set
 love = {'PF' : 'love',
 		'type' : [e, et],
-		'denotation' : lambda a: lambda b: love['set'][a][b] if a in love['set'].keys() and b in love['set'][a].keys() else 0,
+		'denotation' : lambda x: lambda y: love['set'][x][y] if x in love['set'].keys() and y in love['set'][x].keys() else 0,
 		'set' : {'Bill' : {'Mary' : 1}, 
-		 		 'John' : {'Susan' : 1}}}
+		 		 'John' : {'Susan' : 1},
+		 		 'the_hat' : {'Mary' : 1}}}
 
 # This assumes recipient theme order (when using a right-branch structure)
 give = {'PF' : 'give',
@@ -180,6 +202,19 @@ SHIFT = {'PF' : '(SHIFT)',
 		 		  for word1 in word_list if word1['type'] == [e, et]}}
 word_list.extend([SHIFT])
 
+# Definite determiner (Russellian semantics rather than presupposition)
+# Note that entities must be included as words in the word list for this to work properly
+the = {'PF' : 'the',
+	   'type' : [et, e],
+	   'den_str' : 'λP.the unique x s.t. P(x)',
+	   'denotation' : lambda P: [word['denotation'] for word in word_list if P(word['denotation']) == 1][0] if sum([P(word['denotation']) for word in word_list]) == 1 else '#'}
+
+that_comp = {'PF' : 'that',
+			 'type' : [et, et],
+			 'denotation' : lambda P: P
+			 }
+word_list.extend([the, that_comp])
+
 # Context for pronoun resolution
 c = {1 : John['denotation'], 2: Mary['denotation'], 3: Bill['denotation']}
 
@@ -232,7 +267,8 @@ def t(i):
 # One final thing each word has: a version of its denotation function formatted as a string
 # This is just so we can print out the results of each semantic composition step in a readable way, since Python lambda functions are not output as strings
 for word in word_list:
-	word.update({'den_str' : format_den_str(word['denotation'])})
+	if not 'den_str' in word.keys():
+		word.update({'den_str' : format_den_str(word['denotation'])})
 
 def function_application(*, f, arg):
 	# Return the result of function application
@@ -241,10 +277,20 @@ def function_application(*, f, arg):
 	# The type is the result of getting rid of the first type in f
 	# The denotation is the result of applying the function's denotation to the argument's denotation
 	# The set is whatever the characteristic set of f maps the argument to (0 if arg is not in f's characteristic set)
-	if f['set'] == 0:
-		s = 0
+	# Some special logic for the identity function, since its characteristic set is not a function of the word list but a function of any derivable et function
+	if f['denotation'](arg['denotation']) == arg['denotation']:
+		return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
+				'den_str' : arg['den_str'],
+				'type' : arg['type'],
+				'denotation' : arg['denotation'],
+				'set' : arg['set']}
+	if 'set' in f.keys():
+		if f['set'] == 0:
+			s = 0
+		else:
+			s = f['set'][arg['denotation']] if arg['denotation'] in f['set'].keys() else 0
 	else:
-		s = f['set'][arg['denotation']] if arg['denotation'] in f['set'].keys() else 0
+		s = f['denotation'](arg['denotation'])
 	return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
 			'den_str': format_application(f = f, arg = arg),
 			'type' : f['type'][1:][0],
@@ -278,9 +324,10 @@ def predicate_abstraction(*, index, pred, g_local, verbose = False):
 	x = next(v)
 	if verbose:
 		interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{x}'), verbose = verbose)
-	#breakpoint()
+	#print(interpret_sentence_r(pred, g_local = g_local)['den_str'])
+	#if index == 1:
 	return {'PF' : f'{index} ' + re.sub(f'^{index} ', '', interpret_sentence_r(pred, g_local = g_local)['PF']),
-			'den_str' : f'λ{x}.' + re.sub(g(index), f'g({index}/{x})({index})', interpret_sentence_r(pred, g_local = g_local)['den_str']),
+			'den_str' : f'λ{x}.' + re.sub(g_local(index), (g_mod(g_local, f"{index}/{x}"))(index), interpret_sentence_r(pred, g_local = g_local)['den_str']),
 			'type' : [e, interpret_sentence_r(pred, g_local = g_local)['type']],
 			'denotation' : lambda x: interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{x}'))['denotation'],
 			'set' : {word['denotation'] : 1 for word in word_list if word['type'] == e and (interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{word["denotation"]}')))['set'] == 1}}
@@ -333,7 +380,7 @@ def i(X, Y = '', /, *, g_local, verbose = False):
 		# Predicate modification when X_local and Y_local have the same domain of application
 		elif X_local['type'] == Y_local['type']:
 			if verbose:
-				print(f"PM({X_local['den_str']}, {Y_local['den_str']} = {predicate_modification(f1 = X_local, f2 = Y_local)['den_str']} by PM([[{X_local['PF']}]], [[{Y_local['PF']}]])")
+				print(f"PM({X_local['den_str']}, {Y_local['den_str']}) = {predicate_modification(f1 = X_local, f2 = Y_local)['den_str']} by PM([[{X_local['PF']}]], [[{Y_local['PF']}]])")
 			return predicate_modification(f1 = X_local, f2 = Y_local)
 		else:
 			print(f'Type mismatch: type {X_local["type"]} cannot compose with type {Y_local["type"]}.')
@@ -352,7 +399,7 @@ def i(X, Y = '', /, *, g_local, verbose = False):
 
 # Interpret a sentence helper (binary branching only!)
 def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
-	try:
+	#try:
 		if len(sentence) > 2:
 			raise Exception
 		if len(sentence) == 2 and not isinstance(sentence, dict):
@@ -371,8 +418,8 @@ def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
 			return i(branch1, branch2, g_local = g_local, verbose = verbose)
 		elif isinstance(sentence, dict):
 			return i(sentence, g_local = g_local, verbose = verbose)
-	except:
-		print(f'Error: only binary branching! {sentence} has too many branches!')
+	#except:
+	#	print(f'Error: only binary branching! {sentence} has too many branches!')
 
 # Interpret a sentence (allows for printing the full sentence only once)
 def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
@@ -396,4 +443,7 @@ sentence5 = {'PF' : 'John, Mary loves', 'LF' : [John, [1, [Mary, [love, t(1)]]]]
 # Does not currently work correctly. It will compute, but not display the right result. Unless we update the word 'love' to use variables other than x and y for its lambda function
 sentence6 = {'PF' : 'Mary1, Bill2, t1 loves t2', 'LF' : [Mary, [1, [Bill, [2, [t(1), [love, t(2)]]]]]]}
 
-# Note that sentences involving multiple predicate abstractions don't always display correctly because we reuse lambda variables---this is tricky to fix since it involves checking the entire parse path to make sure we don't use one at some lower step. But they will give the correct interpretation, and they will work if you change the variable names in the lexical entries to not match the ones generated during PA. This might get updated or might not depending on how feasible it is to fix
+# Relative clause
+sentence7 = {'PF' : 'the hat that Mary loves', 'LF' : [the, [hat, [that_comp, [1, [Mary, [love, t(1)]]]]]]}
+
+# I'm not sure I'm happy with exactly how the output for predicate abstraction is displayed---but it gets the correct results. The issue is that it won't display nested modifications to the assignment function correctly because of how getting the strings for those works. But the interpretations are correct.
