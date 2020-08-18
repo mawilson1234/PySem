@@ -251,12 +251,11 @@ def predicate_modification(*, f1, f2):
 
 def predicate_abstraction(*, index, pred, g_local, verbose = False):
 	# Predicate abstraction
-	# PF is the PF of the predicate (indices aren't pronounced)
-	# Den_str is handled by the formatting function above
+	# PF-ified semantics is the index + the PF of the predicate
+	# Den_str is the abstracted version of the predicate, with the value given by the usual assignment function replaced by the modified assignment function applied to the argument
 	# Type is [e, pred['type']]
 	# The denotation is the recursive interpretation of the structure where index is mapped to x
-	# The set is the same as the set denoted by the predicate (the interpretation of the pronoun changes, but what is in what set doesn't)
-	#print(index, pred)
+	# The set is the mapping of a word's denotation to true if it's type e and if it's in the set of the interpretation of the predicate wrt the modified assignment function
 	interpret_sentence_r(pred, g_local = g_mod(f'{index}/x'), verbose = verbose)
 	return {'PF' : f'{index} ' + re.sub(f'^{index} ', '', interpret_sentence_r(pred, g_local = g_local)['PF']),
 			'den_str' : 'λx.' + re.sub(g(index), f'g({index}/x)({index})', interpret_sentence_r(pred, g_local = g_local)['den_str']),
