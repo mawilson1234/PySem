@@ -1,17 +1,26 @@
 from inspect import getsource
 import re
+import string
 
 # Convert indices to subscripts for printing
 SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 
+# Get a new variable name in order so we don't repeat ourselves when doing nested predicate abstractions
+def var():
+	x = string.ascii_lowercase.index('x')
+	while True:
+		yield string.ascii_lowercase[x]
+		x = x + 1 if x <= 24 else 0
+
 # Format the assignment function
 def format_g(g_local, n):
-	g_local_set = [g_local(i) for i in c]
-	g_global_set = [g(i) for i in c]
+	g_local_set = ['/'.join([str(i), g_local(i)]) for i in c]
+	g_global_set = ['/'.join([str(i), g(i)]) for i in c]
 	if g_local_set == g_global_set:
 		return f'g'
 	else:
-		return f'g({n}/{g_local(n)})'
+		mods = ')('.join([mod for mod in g_local_set if not mod in g_global_set])
+		return f'g({mods})'
 
 # Format the lambda functions to a string so we can print them out in a readable way
 def format_den_str(f):
@@ -94,7 +103,7 @@ jumping = {'PF' : 'jumping',
 # Note that the arguments need to be specified in the same order in the function and the set
 love = {'PF' : 'love',
 		'type' : [e, et],
-		'denotation' : lambda x: lambda y: love['set'][x][y] if x in love['set'].keys() and y in love['set'][x].keys() else 0,
+		'denotation' : lambda a: lambda b: love['set'][a][b] if a in love['set'].keys() and b in love['set'][a].keys() else 0,
 		'set' : {'Bill' : {'Mary' : 1}, 
 		 		 'John' : {'Susan' : 1}}}
 
@@ -174,24 +183,22 @@ word_list.extend([SHIFT])
 # Context for pronoun resolution
 c = {1 : John['denotation'], 2: Mary['denotation'], 3: Bill['denotation']}
 
-# Return a modified version of g
-def g_mod(mod):
-	return lambda n: g(n, mod = mod)
+# Get a modified version of the assignment just like the one passed to it, except that it respects the mapping specified in the mod argument
+def g_mod(g, mod):
+	# Get the index from the string
+	index = int(re.findall('^[0-9]*', mod)[0])
+
+	# Get the new output for that index
+	modified_output = re.findall('/(.*)$', mod)[0]
+	c_local = c.copy()
+	c_local.update({index : modified_output})
+	return lambda n: g(n) if n != index else c_local[n]
 
 # Assignment function that maps an index to an entity in the context
-def g(n, *, mod = ''):
-	# Create a local copy of the context so we don't modify it globally
-	c_local = c.copy()
-	# If we have modified the assignment function because of an index
-	if mod:
-		# Get the index from the string
-		index = int(re.findall('^[0-9]*', mod)[0])
-		# Get the new output for that index
-		modified_output = re.findall('/(.*)$', mod)[0]
-		c_local.update({index : modified_output})
+def g(n):
 	try:
-		if n in c_local.keys():
-			return c_local[n]
+		if n in c.keys():
+			return c[n]
 		else:
 			raise Exception
 	except:
@@ -267,13 +274,16 @@ def predicate_abstraction(*, index, pred, g_local, verbose = False):
 	# The denotation is the recursive interpretation of the structure where index is mapped to x
 	# The set is the mapping of a word's denotation to true if it's type e and if it's in the set of the interpretation of the predicate wrt the modified assignment function
 	# We do this so that we only print out the results of interpreting things once
+	# Get the next label for a variable so we don't repeat ourselves
+	x = next(v)
 	if verbose:
-		interpret_sentence_r(pred, g_local = g_mod(f'{index}/x'), verbose = verbose)
+		interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{x}'), verbose = verbose)
+	#breakpoint()
 	return {'PF' : f'{index} ' + re.sub(f'^{index} ', '', interpret_sentence_r(pred, g_local = g_local)['PF']),
-			'den_str' : 'λx.' + re.sub(g(index), f'g({index}/x)({index})', interpret_sentence_r(pred, g_local = g_local)['den_str']),
+			'den_str' : f'λ{x}.' + re.sub(g(index), f'g({index}/{x})({index})', interpret_sentence_r(pred, g_local = g_local)['den_str']),
 			'type' : [e, interpret_sentence_r(pred, g_local = g_local)['type']],
-			'denotation' : lambda x: interpret_sentence_r(pred, g_local = g_mod(f'{index}/{x}'))['denotation'],
-			'set' : {word['denotation'] : 1 for word in word_list if word['type'] == e and (interpret_sentence_r(pred, g_local = g_mod(f'{index}/{word["denotation"]}')))['set'] == 1}}
+			'denotation' : lambda x: interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{x}'))['denotation'],
+			'set' : {word['denotation'] : 1 for word in word_list if word['type'] == e and (interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{word["denotation"]}')))['set'] == 1}}
 
 # Interpretation function
 def i(X, Y = '', /, *, g_local, verbose = False):
@@ -287,7 +297,7 @@ def i(X, Y = '', /, *, g_local, verbose = False):
 		X_local = X.copy()
 		X_local.update({'denotation' : re.sub('g', 'g_local', X_local['denotation'])})
 		if verbose:
-			print(f"{X_local['PF']} = {re.sub('_local', '', X_local['denotation'])} = {eval(X_local['denotation'])}")
+			print(f"{X_local['PF']} = {format_g(g_local, X_local['index'])}({X_local['index']}) = {eval(X_local['denotation'])}")
 		X_local['denotation'] = eval(X_local['denotation'])
 		X_local.update({'den_str' : format_den_str(X_local['denotation'])})
 	# If there are two arguments, figure out what semantic composition rule to apply
@@ -302,13 +312,15 @@ def i(X, Y = '', /, *, g_local, verbose = False):
 			Y_local.update({'den_str' : format_den_str(Y_local['denotation'])})
 		# Predicate abstraction when X or Y is an index
 		if isinstance(X_local, int):
+			interpretation = predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local, verbose = verbose)
 			if verbose:
-				print(f"[[{X_local} {interpret_sentence_r(Y_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local)['den_str']} by PA\nSubproof:")
-			return predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local, verbose = verbose)
+				print(f"[[{X_local} {interpret_sentence_r(Y_local, g_local = g_local)['PF']}]] = {interpretation['den_str']} by PA")
+			return interpretation
 		elif isinstance(Y_local, int):
+			interpretation = predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local, verbose = verbose)
 			if verbose:
-				print(f"[[{Y_local} {interpret_sentence_r(X_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local)['den_str']} by PA\nSubproof:")
-			return predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local, verbose = verbose)
+				print(f"[[{Y_local} {interpret_sentence_r(X_local, g_local = g_local)['PF']}]] = {interpretation['den_str']} by PA")
+			return interpretation
 		# Function application when either X_local or Y_local is in the domain of the other
 		elif Y_local['type'] == X_local['type'][0]:
 			if verbose:
@@ -364,6 +376,9 @@ def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
 
 # Interpret a sentence (allows for printing the full sentence only once)
 def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
+	# Reinitialize the lambda variable name generator function
+	global v
+	v = var()
 	if verbose:
 		print(f'\nInterpretation of sentence "{sentence["PF"]}":')
 	interpretation = interpret_sentence_r(sentence['LF'], g_local = g_local, verbose = verbose)
@@ -378,4 +393,7 @@ sentence3 = {'PF' : 'He1 is jumping'.translate(SUB), 'LF' : [he(1), [IS_PRED, ju
 sentence4 = {'PF' : 'Bill, Mary loves', 'LF' : [Bill, [1, [Mary, [love, t(1)]]]]}
 sentence5 = {'PF' : 'John, Mary loves', 'LF' : [John, [1, [Mary, [love, t(1)]]]]}
 
-# Note that sentences involving multiple predicate abstractions don't currently work because we use the same label for all when abstracting---this is not a simple thing to fix since it involves generating a unique new label that isn't being used. It will be implemented later
+# Does not currently work correctly. It will compute, but not display the right result. Unless we update the word 'love' to use variables other than x and y for its lambda function
+sentence6 = {'PF' : 'Mary1, Bill2, t1 loves t2', 'LF' : [Mary, [1, [Bill, [2, [t(1), [love, t(2)]]]]]]}
+
+# Note that sentences involving multiple predicate abstractions don't always display correctly because we reuse lambda variables---this is tricky to fix since it involves checking the entire parse path to make sure we don't use one at some lower step. But they will give the correct interpretation, and they will work if you change the variable names in the lexical entries to not match the ones generated during PA. This might get updated or might not depending on how feasible it is to fix
