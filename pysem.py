@@ -1,5 +1,17 @@
-from dill.source import getsource
+from inspect import getsource, getfullargspec
 import re
+
+# Convert indices to subscripts for printing
+SUB = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+
+# Format the assignment function
+def format_g(g_local, n):
+	g_local_set = [g_local(i) for i in c]
+	g_global_set = [g(i) for i in c]
+	if g_local_set == g_global_set:
+		return f'g'
+	else:
+		return f'g({n}/{g_local(n)})'
 
 # Format the lambda functions to a string so we can print them out in a readable way
 def format_den_str(f):
@@ -15,6 +27,7 @@ def format_den_str(f):
 			formatted = re.sub(r' if.*$', '', formatted)
 		else:
 			formatted = re.sub('if', 'iff', formatted)
+			formatted = re.sub('==', '=', formatted)
 		formatted = re.sub(r'\[(.*?)\]', r'(\g<1>)', formatted)
 	else:
 		formatted = re.sub(r'_', ' ', f)
@@ -22,7 +35,7 @@ def format_den_str(f):
 
 # Stringify the output of function application since python lambda functions aren't output as strings
 def format_application(*, f, arg):
-	f = f['den_str']
+	formatted = f['den_str']
 	if not isinstance(arg['denotation'], str):
 		arg = arg['den_str']
 		arg = re.sub(r'^λ.*?\.', '', arg)
@@ -30,11 +43,20 @@ def format_application(*, f, arg):
 	else:
 		arg = arg['den_str']
 	# Get the label for the argument
-	arg_label = re.match(r'^λ(.*?)\.', f).groups()[0]
-	# Strip off that label
-	formatted = re.sub(r'^λ.*?\.', '', f)
-	# Replace the argument's label with its value
-	formatted = re.sub(fr'(^|[^A-Za-z0-9]+){arg_label}($|[^A-Za-z0-9]+)', fr'\g<1>{arg}\g<2>', formatted)
+	if re.match(r'^λ(.*?)\.', formatted):
+		arg_label = re.match(r'^λ(.*?)\.', formatted).groups()[0]
+		# Strip off that label
+		formatted = re.sub(r'^λ.*?\.', '', formatted)
+		# Format assignment functions
+		#if re.findall(r'g\(.*?\/.*?\)', formatted):
+		#	breakpoint()
+		#	g_arg = re.findall(r'g\(.*?\/.*?\)\((.*?)\)', formatted)[0]
+		#	g_modification_index = re.findall(r'g\((.*?)\/', formatted)[0]
+		#	if g_arg == g_modification_index:
+		#		g_modification_label = re.findall(r'g\(.*?\/(.*?)\)', formatted)[0]
+		#		formatted = re.sub(fr'g\({g_modification_index}\/{g_modification_label}\)\({g_arg}\)', g_modification_label, formatted)
+		# Replace the argument's label with its value
+		formatted = re.sub(fr'(^|[^A-Za-z0-9]){arg_label}($|[^A-Za-z0-9])', fr'\g<1>{arg}\g<2>', formatted)
 	return formatted
 
 # Stringify the output of predicate modification since python lambda functions aren't output as strings
@@ -71,10 +93,10 @@ jumping = {'PF' : 'jumping',
 
 # Note that the arguments need to be specified in the same order in the function and the set
 love = {'PF' : 'love',
-		'type' : [e, et], 
+		'type' : [e, et],
 		'denotation' : lambda x: lambda y: love['set'][x][y] if x in love['set'].keys() and y in love['set'][x].keys() else 0,
-		'set' : {'John' : {'Mary' : 1}, 
-		 		 'Bill' : {'Susan' : 1}}}
+		'set' : {'Bill' : {'Mary' : 1}, 
+		 		 'John' : {'Susan' : 1}}}
 
 # This assumes recipient theme order (when using a right-branch structure)
 give = {'PF' : 'give',
@@ -127,7 +149,7 @@ Mary = {'PF' : 'Mary',
 		'type' : e,
 		'denotation' : 'Mary'}
 
-word_list = [jumping, love, blue, hat, dress, the_hat, Bill, Susan, Mary, the_dress]
+word_list = [jumping, love, blue, hat, dress, the_hat, Bill, Susan, Mary, John, the_dress]
 
 IS_PRED = {'PF' : 'is',
 		   'type' : [et, et],
@@ -152,21 +174,43 @@ word_list.extend([SHIFT])
 # Context for pronoun resolution
 c = {1 : John['denotation'], 2: Mary['denotation'], 3: Bill['denotation']}
 
+# Return a modified version of g
+def g_mod(mod):
+	return lambda n: g(n, mod = mod)
+
 # Assignment function that maps an index to an entity in the context
-def g(n):
+def g(n, *, mod = ''):
+	# Create a local copy of the context so we don't modify it globally
+	c_local = c.copy()
+	# If we have modified the assignment function because of an index
+	if mod:
+		# Get the index from the string
+		index = int(re.findall('^[0-9]*', mod)[0])
+		# Get the new output for that index
+		modified_output = re.findall('/(.*)$', mod)[0]
+		c_local.update({index : modified_output})
 	try:
-		if n in c.keys():
-			return c[n]
+		if n in c_local.keys():
+			return c_local[n]
 		else:
 			raise Exception
 	except:
 		print(f'{n} not in domain of assignment function g.')
 
 # Pronoun (note that this does not implement presuppositions)
-he1 = {'PF' : 'he',
+he1 = {'PF' : 'he1'.translate(SUB),
+	   'index' : 1,
 	   'type' : e,
-	   'denotation' : g(1)}
+	   'denotation' : 'g(1)'}
 word_list.extend([he1])
+
+# Trace (just like a pronoun)
+t1 = {'PF' : 't1'.translate(SUB),
+	  'index' : 1,
+	  'type' : e,
+	  'denotation' : 'g(1)'}
+
+pronouns = [he1, t1]
 
 # One final thing each word has: a version of its denotation function formatted as a string
 # This is just so we can print out the results of each semantic composition step in a readable way, since Python lambda functions are not output as strings
@@ -180,11 +224,15 @@ def function_application(*, f, arg):
 	# The type is the result of getting rid of the first type in f
 	# The denotation is the result of applying the function's denotation to the argument's denotation
 	# The set is whatever the characteristic set of f maps the argument to (0 if arg is not in f's characteristic set)
+	if f['set'] == 0:
+		s = 0
+	else:
+		s = f['set'][arg['denotation']] if arg['denotation'] in f['set'].keys() else 0
 	return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
 			'den_str': format_application(f = f, arg = arg),
 			'type' : f['type'][1:][0],
 			'denotation' : f['denotation'](arg['denotation']),
-			'set' : (s := f['set'][arg['denotation']] if arg['denotation'] in f['set'].keys() else 0)}
+			'set' : s}
 			#'set' : {t[1:][0] for t in Y['set'] if X['denotation'] == t[0] and len(t) > 0}}
 			#'set' : {t[1:] for t in Y['set'] if X['denotation'] == t[0] and len(t) > 0}}
 
@@ -201,56 +249,121 @@ def predicate_modification(*, f1, f2):
 			'denotation' : lambda x: 1 if f1['denotation'](x) and f2['denotation'](x) else 0,
 			'set' : [item for item in f1['set'] if item in f2['set']]}
 
+def predicate_abstraction(*, index, pred, g_local, verbose = False):
+	# Predicate abstraction
+	# PF is the PF of the predicate (indices aren't pronounced)
+	# Den_str is handled by the formatting function above
+	# Type is [e, pred['type']]
+	# The denotation is the recursive interpretation of the structure where index is mapped to x
+	# The set is the same as the set denoted by the predicate (the interpretation of the pronoun changes, but what is in what set doesn't)
+	#print(index, pred)
+	interpret_sentence_r(pred, g_local = g_mod(f'{index}/x'), verbose = verbose)
+	return {'PF' : f'{index} ' + re.sub(f'^{index} ', '', interpret_sentence_r(pred, g_local = g_local)['PF']),
+			'den_str' : 'λx.' + re.sub(g(index), f'g({index}/x)({index})', interpret_sentence_r(pred, g_local = g_local)['den_str']),
+			'type' : [e, interpret_sentence_r(pred, g_local = g_local)['type']],
+			'denotation' : lambda x: interpret_sentence_r(pred, g_local = g_mod(f'{index}/{x}'))['denotation'],
+			'set' : {word['denotation'] : 1 for word in word_list if word['type'] == e and (interpret_sentence_r(pred, g_local = g_mod(f'{index}/{word["denotation"]}')))['set'] == 1}}
+
 # Interpretation function
-def i(X, Y = '', /, *, verbose = False):
+def i(X, Y = '', /, *, g_local, verbose = False):
+	# Set up local copies of the variables so we don't override the global ones.
+	# We define these names first in case they are ints, in which case copying wouldn't work
+	X_local = X
+	Y_local = Y
+	# If X is a pronoun, update its denotation and den_str relative to any modified assignment function
+	if X in pronouns:
+		# Make local copies so we don't mess with the global ones
+		X_local = X.copy()
+		X_local.update({'denotation' : re.sub('g', 'g_local', X_local['denotation'])})
+		if verbose:
+			print(f"{X_local['PF']} = {re.sub('_local', '', X_local['denotation'])} = {eval(X_local['denotation'])}")
+		X_local['denotation'] = eval(X_local['denotation'])
+		X_local.update({'den_str' : format_den_str(X_local['denotation'])})
 	# If there are two arguments, figure out what semantic composition rule to apply
 	if Y:
-		# Function application when either X or Y is in the domain of the other
-		if Y['type'] == X['type'][0]:
+		# If Y is a pronoun, update its denotation and den_str relative to any modified assignment function
+		if Y in pronouns:
+			Y_local = Y.copy()
+			Y_local.update({'denotation' : re.sub('g', 'g_local', Y_local['denotation'])})
 			if verbose:
-				print(f"[{X['den_str']}]({Y['den_str']}) = {function_application(f = X, arg = Y)['den_str']} by FA([[{X['PF']}]], [[{Y['PF']}]])")
-			return function_application(f = X, arg = Y) 
-		elif X['type'] == Y['type'][0]:
+				print(f"{Y_local['PF']} = {format_g(g_local, Y_local['index'])}({Y_local['index']}) = {eval(Y_local['denotation'])}")
+			Y_local['denotation'] = eval(Y_local['denotation'])
+			Y_local.update({'den_str' : format_den_str(Y_local['denotation'])})
+		# Predicate abstraction when X or Y is an index
+		if isinstance(X_local, int):
 			if verbose:
-				print(f"[{Y['den_str']}]({X['den_str']}) = {function_application(f = Y, arg = X)['den_str']} by FA([[{Y['PF']}]], [[{X['PF']}]])")
-			return function_application(f = Y, arg = X)
-		# Predicate modification when X and Y have the same domain of application
-		elif X['type'] == Y['type']:
+				print(f"[[{X_local} {interpret_sentence_r(Y_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local)['den_str']} by PA")
+			return predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local, verbose = verbose)
+		elif isinstance(Y_local, int):
 			if verbose:
-				print(f"PM({X['den_str']}, {Y['den_str']} = {predicate_modification(f1 = X, f2 = Y)['den_str']} by PM([[{X['PF']}]], [[{Y['PF']}]])")
-			return predicate_modification(f1 = X, f2 = Y)
+				print(f"[[{Y_local} {interpret_sentence_r(X_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local)['den_str']} by PA")
+			return predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local, verbose = verbose)
+		# Function application when either X_local or Y_local is in the domain of the other
+		elif Y_local['type'] == X_local['type'][0]:
+			if verbose:
+				print(f"[{X_local['den_str']}]({Y_local['den_str']}) = {function_application(f = X_local, arg = Y_local)['den_str']} by FA([[{X_local['PF']}]], [[{Y_local['PF']}]])")
+			return function_application(f = X_local, arg = Y_local) 
+		elif X_local['type'] == Y_local['type'][0]:
+			if verbose:
+				print(f"[{Y_local['den_str']}]({X_local['den_str']}) = {function_application(f = Y_local, arg = X_local)['den_str']} by FA([[{Y_local['PF']}]], [[{X_local['PF']}]])")
+			return function_application(f = Y_local, arg = X_local)
+		# Predicate modification when X_local and Y_local have the same domain of application
+		elif X_local['type'] == Y_local['type']:
+			if verbose:
+				print(f"PM({X_local['den_str']}, {Y_local['den_str']} = {predicate_modification(f1 = X_local, f2 = Y_local)['den_str']} by PM([[{X_local['PF']}]], [[{Y_local['PF']}]])")
+			return predicate_modification(f1 = X_local, f2 = Y_local)
 		else:
-			print(f'Type mismatch: type {X["type"]} cannot compose with type {Y["type"]}.')
+			print(f'Type mismatch: type {X_local["type"]} cannot compose with type {Y_local["type"]}.')
 	# Otherwise, return the single argument
 	else:
-		return X
+		# If X is a pronoun, update its denotation and den_str relative to any modified assignment function
+		if X in pronouns:
+		# Make local copies so we don't mess with the global ones
+			X_local = X.copy()
+			X_local.update({'denotation' : re.sub('g', 'g_local', X_local['denotation'])})
+			if verbose:
+				print(f"{X_local['PF']} = {re.sub('_local', '', X_local['denotation'])} = {eval(X_local['denotation'])}")
+			X_local['denotation'] = eval(X_local['denotation'])
+			X_local.update({'den_str' : format_den_str(X_local['denotation'])})
+		return X_local
+
+# Interpret a sentence helper (binary branching only!)
+def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
+	#try:
+		#if len(sentence) > 2:
+	#		raise Exception
+	#print(sentence)
+	if len(sentence) == 2 and not isinstance(sentence, dict):
+		branch1 = sentence[0]
+		branch2 = sentence[1]
+		if not isinstance(branch1, dict):
+			if isinstance(branch1, int):
+				return i(branch1, branch2, g_local = g_local, verbose = verbose)
+			else:
+				branch1 = interpret_sentence_r(branch1, g_local = g_local, verbose = verbose)
+		if not isinstance(branch2, dict):
+			if isinstance(branch2, int):
+				return i(branch1, branch2, verbose = verbose)
+			else:
+				branch2 = interpret_sentence_r(branch2, g_local = g_local, verbose = verbose)
+		return i(branch1, branch2, g_local = g_local, verbose = verbose)
+	elif isinstance(sentence, dict):
+		return i(sentence, g_local = g_local, verbose = verbose)
+	#except:
+#		print(f'Error: only binary branching! {sentence} has too many branches!')
+
+# Interpret a sentence (allows for printing the full sentence only once)
+def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
+	#if verbose:
+	print(f'\nInterpretation of sentence "{sentence["PF"]}":')
+	interpretation = interpret_sentence_r(sentence['LF'], g_local = g_local, verbose = verbose)
+	#if verbose:
+	print(f'{interpretation["denotation"]}\n')
+	return interpretation
 
 # Some test sentences
 sentence1 = {'PF' : "The hat is blue", 'LF' : [the_hat, [[IS_IDENT, SHIFT], blue]]}
 sentence2 = {'PF' : 'The hat is the dress', 'LF' : [the_hat, [IS_IDENT, the_dress]]}
-sentence3 = {'PF' : 'He is jumping', 'LF' : [he1, [IS_PRED, jumping]]}
-
-# Interpret a sentence helper (binary branching only!)
-def interpret_sentence_r(sentence, /, verbose = False):
-	try:
-		if len(sentence) > 2:
-			raise Exception
-		branch1 = sentence[0]
-		branch2 = sentence[1]
-		if not isinstance(branch1, dict):
-			branch1 = interpret_sentence_r(branch1, verbose = verbose)
-		if not isinstance(branch2, dict):
-			branch2 = interpret_sentence_r(branch2, verbose = verbose)
-		return i(branch1, branch2, verbose = verbose)
-	except:
-		print(f'Error: only binary branching! {sentence} has too many branches!')
-
-# Interpret a sentence (allows for printing the full sentence only once)
-def interpret_sentence(sentence, /, verbose = False):
-	#if verbose:
-	print(f'Interpretation of sentence "{sentence["PF"]}":')
-	interpretation = interpret_sentence_r(sentence['LF'], verbose = verbose)
-	#if verbose:
-	print(interpretation['denotation'])
-
-# TODO: pronominal binding/predicate abstraction, quantifiers, read in and format dict from CSV(?)
+sentence3 = {'PF' : 'He1 is jumping'.translate(SUB), 'LF' : [he1, [IS_PRED, jumping]]}
+sentence4 = {'PF' : 'Bill, Mary loves', 'LF' : [Bill, [1, [Mary, [love, t1]]]]}
+sentence5 = {'PF' : 'John, Mary loves', 'LF' : [John, [1, [Mary, [love, t1]]]]}
