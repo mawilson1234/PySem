@@ -329,10 +329,9 @@ def i(X, Y = '', /, *, g_local, verbose = False):
 
 # Interpret a sentence helper (binary branching only!)
 def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
-	#try:
-		#if len(sentence) > 2:
-	#		raise Exception
-	#print(sentence)
+	try:
+		if len(sentence) > 2:
+			raise Exception
 	if len(sentence) == 2 and not isinstance(sentence, dict):
 		branch1 = sentence[0]
 		branch2 = sentence[1]
@@ -349,8 +348,8 @@ def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
 		return i(branch1, branch2, g_local = g_local, verbose = verbose)
 	elif isinstance(sentence, dict):
 		return i(sentence, g_local = g_local, verbose = verbose)
-	#except:
-#		print(f'Error: only binary branching! {sentence} has too many branches!')
+	except:
+		print(f'Error: only binary branching! {sentence} has too many branches!')
 
 # Interpret a sentence (allows for printing the full sentence only once)
 def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
