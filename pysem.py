@@ -1,4 +1,4 @@
-from inspect import getsource, getfullargspec
+from inspect import getsource
 import re
 
 # Convert indices to subscripts for printing
