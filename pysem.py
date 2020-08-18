@@ -303,11 +303,11 @@ def i(X, Y = '', /, *, g_local, verbose = False):
 		# Predicate abstraction when X or Y is an index
 		if isinstance(X_local, int):
 			if verbose:
-				print(f"[[{X_local} {interpret_sentence_r(Y_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local)['den_str']} by PA")
+				print(f"[[{X_local} {interpret_sentence_r(Y_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local)['den_str']} by PA\nSubproof:")
 			return predicate_abstraction(index = X_local, pred = Y_local, g_local = g_local, verbose = verbose)
 		elif isinstance(Y_local, int):
 			if verbose:
-				print(f"[[{Y_local} {interpret_sentence_r(X_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local)['den_str']} by PA")
+				print(f"[[{Y_local} {interpret_sentence_r(X_local, g_local = g_local)['PF']}]] = {predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local)['den_str']} by PA\nSubproof:")
 			return predicate_abstraction(index = Y_local, pred = X_local, g_local = g_local, verbose = verbose)
 		# Function application when either X_local or Y_local is in the domain of the other
 		elif Y_local['type'] == X_local['type'][0]:
