@@ -53,14 +53,15 @@ def format_application(*, f, arg):
 		if not isinstance(arg['denotation'], str):
 			arg = arg['den_str']
 			# For 'the'
-			if not 'the unique x s.t.' in formatted:
+			if not 'the unique' in formatted:
 				if re.findall(r'^λ.*?\.', arg):
 					arg = re.sub(r'^λ.*?\.', '', arg)
 					arg = re.sub(r'\(.*?\)', '', arg)
 			else:
-				arg_to_apply = formatted[formatted.index('('):][1:-1]
-				formatted = re.sub(fr'\({arg_to_apply}\)', '', formatted)
-				arg = format_application(f = arg, arg = arg_to_apply)
+				if formatted.endswith(')'):
+					arg_to_apply = formatted[formatted.index('('):][1:-1]
+					formatted = re.sub(fr'\({arg_to_apply}\)', '', formatted)
+					arg = format_application(f = arg, arg = arg_to_apply)
 		else:
 			arg = arg['den_str']
 	# Get the label for the argument
@@ -71,13 +72,17 @@ def format_application(*, f, arg):
 		# Strip off that label
 		formatted = re.sub(r'^λ.*?\.', '', formatted)
 		# If the argument is also the name of a variable
-		if arg in existing_vars and len(existing_vars) > 1:
+		if (arg in existing_vars or 'the unique' in arg) and len(existing_vars) > 1:
 			# Get a variable name that is not already being used
 			variable = var()
 			while (var_name := next(variable)) in existing_vars:
 				continue
 			# Replace the variable name in the formatted string with the new variable name so we don't incorrectly bind it
 			formatted = re.sub(fr'(^|[^A-Za-z0-9]){arg}($|[^A-Za-z0-9])', fr'\g<1>{var_name}\g<2>', formatted)
+			if 'the unique' in arg:
+				the_label = re.findall(r'the unique (.*?) s\.t\.', arg)[0]
+				if the_label in existing_vars:
+					arg = re.sub(fr'(^|[^A-Za-z0-9]){the_label}($|[^A-Za-z0-9])', fr'\g<1>{var_name}\g<2>', arg)
 		# Format assignment functions
 		#if re.findall(r'g\(.*?\/.*?\)', formatted):
 		#	breakpoint()
@@ -219,6 +224,34 @@ that_comp = {'PF' : 'that',
 			 'set' : {0 : 0, 1 : 1}}
 word_list.extend([the, that_comp])
 
+# Logical connectives. Have to use uppercase because lowercase are reserved Python keywords
+AND = {'PF' : 'and',
+	   'type' : [t, [t, t]],
+	   'den_str' : 'λP.λQ.P & Q',
+	   'denotation' : lambda P: lambda Q: 1 if P == 1 and Q == 1 else 0,
+	   'set' : {1 : {1 : 1},
+	   			1 : {0 : 0},
+	   			0 : {1 : 0},
+	   			0 : {0 : 0}}}
+
+OR = {'PF' : 'or',
+	  'type' : [t, [t, t]],
+	  'den_str' : 'λP.λQ.P \\/ Q',
+	  'denotation' : lambda P: lambda Q: 1 if P == 1 or Q == 1 else 0,
+	  'set' : {1 : {1 : 1},
+	  		   1 : {0 : 1},
+	  		   0 : {1 : 1},
+	  		   0 : {0 : 0}}}
+
+NOT = {'PF' : 'not',
+	   'type' : [t, t],
+	   'den_str' : 'λP.¬(P)',
+	   'denotation' : lambda P: 0 if P == 1 else 1,
+	   'set' : {1 : 0,
+	   			0 : 1}}
+
+word_list.extend([AND, OR, NOT])
+
 # Context for pronoun resolution
 c = {1 : John['denotation'], 2: Mary['denotation'], 3: Bill['denotation']}
 
@@ -305,7 +338,6 @@ def function_application(*, f, arg):
 			s = 0
 		else:
 			s = f['set'][arg['denotation']] if arg['denotation'] in f['set'].keys() else 0
-
 
 	if 's' in locals():
 		return {'PF' : PF, 'den_str': den_str, 'type' : ty, 'denotation' : denotation, 'set' : s}
@@ -423,7 +455,7 @@ def i(X, Y = '', /, *, g_local, verbose = False):
 
 # Interpret a sentence helper (binary branching only!)
 def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
-	try:
+	#try:
 		if len(sentence) > 2:
 			raise Exception
 		if len(sentence) == 2 and not isinstance(sentence, dict):
@@ -442,11 +474,11 @@ def interpret_sentence_r(sentence, /, *, g_local, verbose = False):
 			return i(branch1, branch2, g_local = g_local, verbose = verbose)
 		elif isinstance(sentence, dict):
 			return i(sentence, g_local = g_local, verbose = verbose)
-	except:
-		print(f'Error: only binary branching! {sentence} has too many branches!')
+	#except:
+	#	print(f'Error: only binary branching! {sentence} has too many branches!')
 
 # Interpret a sentence (allows for printing the full sentence only once)
-def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
+def interpret_sentence(sentence, /, *, g_local = g, verbose = True):
 	# Reinitialize the lambda variable name generator function
 	global v
 	v = var()
@@ -480,5 +512,10 @@ sentence8 = {'PF' : 'the dress that Mary loves', 'LF' : [the, [dress, [1, [that_
 # Full sentences with relative clauses
 sentence9 = {'PF' : 'the hat that Mary loves is blue', 'LF' : [[the, [hat, [1, [that_comp, [Mary, [love, t(1)]]]]]], [[IS_IDENT, SHIFT], blue]]}
 sentence10 = {'PF' : 'Mary loves the hat that is blue', 'LF' : [Mary, [love, [the, [hat, [1, [that_comp, [t(1), [[IS_IDENT, SHIFT], blue]]]]]]]]}
+
+# Logical connectives
+sentence11 = {'PF' : 'Mary is jumping or Bill is jumping' , 'LF' : [[Mary, [[IS_IDENT, SHIFT], jumping]], [OR, [Bill, [[IS_IDENT, SHIFT], jumping]]]]}
+sentence12 = {'PF' : 'Mary loves Bill and loves the blue hat', 'LF' : [Mary, [1, [[t(1), [love, Bill]], [AND, [t(1), [love, [the, [blue, hat]]]]]]]]}
+sentence13 = {'PF' : "Mary doesn't love John", 'LF' : [NOT, [Mary, [love, John]]]}
 
 # I'm not sure I'm happy with exactly how the output for predicate abstraction is displayed---but it gets the correct results. The issue is that it won't display nested modifications to the assignment function correctly because of how getting the strings for those works. But the interpretations are correct.
