@@ -458,13 +458,19 @@ def interpret_sentence(sentence, /, *, g_local = g, verbose = False):
 	return interpretation
 
 # Some test sentences
+# Type shifter and predication
 sentence1 = {'PF' : "The hat is blue", 'LF' : [the_hat, [[IS_IDENT, SHIFT], blue]]}
+# Identity
 sentence2 = {'PF' : 'The hat is the dress', 'LF' : [the_hat, [IS_IDENT, the_dress]]}
+
+# Pronoun
 sentence3 = {'PF' : 'He1 is jumping'.translate(SUB), 'LF' : [he(1), [IS_PRED, jumping]]}
+
+# Topicalization
 sentence4 = {'PF' : 'Bill, Mary loves', 'LF' : [Bill, [1, [Mary, [love, t(1)]]]]}
 sentence5 = {'PF' : 'John, Mary loves', 'LF' : [John, [1, [Mary, [love, t(1)]]]]}
 
-# Does not currently work correctly. It will compute, but not display the right result. Unless we update the word 'love' to use variables other than x and y for its lambda function
+# This is not a good English sentence because English doesn't allow multiple topicalization, but it shows that nested PA works correctly
 sentence6 = {'PF' : 'Mary1, Bill2, t1 loves t2', 'LF' : [Mary, [1, [Bill, [2, [t(1), [love, t(2)]]]]]]}
 
 # Relative clauses
