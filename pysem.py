@@ -150,7 +150,8 @@ blue = {'PF' : 'blue',
 hat = {'PF' : 'hat',
 		'type' : et,
 	   'denotation' : lambda x: hat['set'][x] if x in hat['set'].keys() else 0,
-	   'set' : {'the_hat' : 1}}
+	   'set' : {'the_hat' : 1,
+	   			'the_second_hat' : 1}}
 
 dress = {'PF' : 'dress',
 		 'type' : et,
@@ -205,6 +206,8 @@ word_list.extend([SHIFT])
 
 # Definite determiner (Russellian semantics rather than presupposition)
 # Note that entities must be included as words in the word list for this to work properly
+# Since 'the' returns an entity, we do not define a set for it, as entities do not have
+# characteristic sets in our model
 the = {'PF' : 'the',
 	   'type' : [et, e],
 	   'den_str' : 'λP.the unique x s.t. P(x)',
@@ -274,10 +277,22 @@ for word in word_list:
 def function_application(*, f, arg):
 	# Return the result of function application
 	# PF is just concatenation of the strings
+	PF = f'{f["PF"]} {arg["PF"]}'.rstrip()
 	# Den_str is handled by the formatting function above
+	den_str = format_application(f = f, arg = arg)
 	# The type is the result of getting rid of the first type in f
+	ty = f['type'][1:][0]
 	# The denotation is the result of applying the function's denotation to the argument's denotation
-	# The set is whatever the characteristic set of f maps the argument to (0 if arg is not in f's characteristic set)
+	presupposition_failure = arg['denotation'] == '#' or f['denotation'] == '#'
+	if not presupposition_failure:
+		denotation = f['denotation'](arg['denotation'])
+	else:
+		denotation = '#'
+
+	presupposition_failure = denotation == '#' or presupposition_failure
+	if presupposition_failure:
+		den_str = '#'
+		denotation = '#'
 	# Some special logic for the identity function, since its characteristic set is not a function of the word list but a function of any derivable et function
 	#if f['denotation'](arg['denotation']) == arg['denotation']:
 	#	return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
@@ -290,28 +305,34 @@ def function_application(*, f, arg):
 			s = 0
 		else:
 			s = f['set'][arg['denotation']] if arg['denotation'] in f['set'].keys() else 0
+
+
+	if 's' in locals():
+		return {'PF' : PF, 'den_str': den_str, 'type' : ty, 'denotation' : denotation, 'set' : s}
 	else:
-		s = f['denotation'](arg['denotation'])
-	return {'PF' : f'{f["PF"]} {arg["PF"]}'.rstrip(),
-			'den_str': format_application(f = f, arg = arg),
-			'type' : f['type'][1:][0],
-			'denotation' : f['denotation'](arg['denotation']),
-			'set' : s}
+		return {'PF' : PF, 'den_str': den_str, 'type' : ty, 'denotation' : denotation}
 			#'set' : {t[1:][0] for t in Y['set'] if X['denotation'] == t[0] and len(t) > 0}}
 			#'set' : {t[1:] for t in Y['set'] if X['denotation'] == t[0] and len(t) > 0}}
 
 def predicate_modification(*, f1, f2):
 	# Return the result of predicate modification
 	# PF is contactenation of the strings
+	PF = f'{f1["PF"]} {f2["PF"]}'
 	# Den_str is handled by the formatting function above
+	den_str = format_modification(f1, f2)
 	# Since this is only called when f1 and f2 have the same type, the type is equal to their type (either f1['type'] or f2['type'] would work, since the types are identical)
+	ty = f1['type']
 	# The denotation is True iff f1(x) and f2(x)
 	# The set is the set of all items in both f1 and f2 (e.g., every item in f1 that is also in f2)
-	return {'PF' : f'{f1["PF"]} {f2["PF"]}',
-			'den_str' : format_modification(f1, f2),
-			'type' : f1['type'],
-			'denotation' : lambda x: 1 if f1['denotation'](x) and f2['denotation'](x) else 0,
-			'set' : [item for item in f1['set'] if item in f2['set']]}
+
+	presupposition_failure = f1['denotation'] == '#' or f2['denotation'] == '#'
+
+	if not presupposition_failure:
+		return {'PF' : PF, 'den_str' : den_str, 'type' : ty,
+				'denotation' : lambda x: 1 if f1['denotation'](x) and f2['denotation'](x) else 0,
+				'set' : [item for item in f1['set'] if item in f2['set']]}
+	else:
+		return {'PF' : PF, 'den_str' : '#',  'type' : ty, 'denotation' : '#'}
 
 def predicate_abstraction(*, index, pred, g_local, verbose = False):
 	# Predicate abstraction
@@ -331,7 +352,9 @@ def predicate_abstraction(*, index, pred, g_local, verbose = False):
 			'den_str' : f'λ{x}.' + re.sub(g_local(index), (g_mod(g_local, f"{index}/{x}"))(index), interpret_sentence_r(pred, g_local = g_local)['den_str']),
 			'type' : [e, interpret_sentence_r(pred, g_local = g_local)['type']],
 			'denotation' : lambda x: interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{x}'))['denotation'],
-			'set' : {word['denotation'] : 1 for word in word_list if word['type'] == e and (interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{word["denotation"]}')))['set'] == 1}}
+			'set' : {word['denotation'] : 1 
+						for word in [word for word in word_list if word['type'] == e] 
+							if (interpret_sentence_r(pred, g_local = g_mod(g_local, f'{index}/{word["denotation"]}')))['set'] == 1}}
 
 # Interpretation function
 def i(X, Y = '', /, *, g_local, verbose = False):
@@ -447,5 +470,9 @@ sentence6 = {'PF' : 'Mary1, Bill2, t1 loves t2', 'LF' : [Mary, [1, [Bill, [2, [t
 # Relative clauses
 sentence7 = {'PF' : 'the hat that Mary loves', 'LF' : [the, [hat, [1, [that_comp, [Mary, [love, t(1)]]]]]]}
 sentence8 = {'PF' : 'the dress that Mary loves', 'LF' : [the, [dress, [1, [that_comp, [Mary, [love, t(1)]]]]]]}
+
+# Full sentences with relative clauses
+sentence9 = {'PF' : 'the hat that Mary loves is blue', 'LF' : [[the, [hat, [1, [that_comp, [Mary, [love, t(1)]]]]]], [[IS_IDENT, SHIFT], blue]]}
+sentence10 = {'PF' : 'Mary loves the hat that is blue', 'LF' : [Mary, [love, [the, [hat, [1, [that_comp, [t(1), [[IS_IDENT, SHIFT], blue]]]]]]]]}
 
 # I'm not sure I'm happy with exactly how the output for predicate abstraction is displayed---but it gets the correct results. The issue is that it won't display nested modifications to the assignment function correctly because of how getting the strings for those works. But the interpretations are correct.
